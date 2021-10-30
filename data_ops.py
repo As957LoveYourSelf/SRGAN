@@ -30,17 +30,16 @@ tran = transforms.Compose(
 )
 
 
-def hr2lr(tensor: Tensor, scale_factor):
-    assert (isinstance(tensor, Tensor))
-    t_shape = tensor.shape
-    tensor = tensor.view((1, *list(t_shape)))
-    return F.interpolate(tensor, scale_factor=scale_factor)
+def hr2lr(image, scale_factor):
+    t_shape = image.shape
+    image = image.view((1, *list(t_shape))).cuda()
+    return F.interpolate(image, scale_factor=scale_factor)
 
 
 def save_hr2lr(hr_image, save_hr_path, save_lr_path):
     filename = os.path.basename(hr_image)
     image = cv2.imread(hr_image)
-    image = tran(image)
+    image = tran(image).cuda()
     # save HR image
     save_image(image, os.path.join(save_hr_path, "hr_" + filename))
     image = hr2lr(image, scale_factor=0.25)
