@@ -8,24 +8,29 @@ class Generator(nn.Module):
         assert (residual_num >= 1)
         super(Generator, self).__init__()
         # define down_sample layer
-        self.hb = HeadBlock(in_channel=3, out_channel=64, kernel_size=9)
+        self.hb = HeadBlock(in_channel=3, out_channel=64, kernel_size=4)
         # define residual blocks
         self.residual_blocks = []
         for i in range(residual_num):
             self.residual_blocks.append(ResidualBlock(64, 64, kernel_size=3))
         self.residuals = nn.Sequential(*self.residual_blocks)
         self.tailblock = TailBlock(in_channel=64, out_channel=64, kernel_size=3)
-        # define residual blocks
-        self.upsample_blocks = []
-        in_channel = 64
-        out_channel = 256
-        for i in range(upsample_x - 1):
-            self.upsample_blocks.append(UpSample(in_channel=in_channel, out_channel=out_channel, kernel_size=3))
-            in_channel = out_channel
-        self.upsample_blocks.append(UpSample(in_channel=out_channel, out_channel=out_channel // 2, kernel_size=3))
-        self.upsamples = nn.Sequential(*self.upsample_blocks)
-        # the last convolution layer to rebuilt image
-        self.conv = nn.Conv2d(in_channels=out_channel // 2, out_channels=3, kernel_size=9)
+        # define UpSample blocks
+        self.upsamples = nn.Sequential(
+            UpSample(in_channel=64, out_channel=128, kernel_size=3),
+            UpSample(in_channel=128, out_channel=256, kernel_size=3),
+            UpSample(in_channel=256, out_channel=256, kernel_size=3)
+        )
+
+        self.features = nn.Sequential(
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(in_channels=256, out_channels=128, kernel_size=3),
+            # the last convolution layer to rebuilt image
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3),
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(in_channels=64, out_channels=3, kernel_size=3)
+        )
 
     def forward(self, x):
         hb_out = self.hb(x)
@@ -33,7 +38,8 @@ class Generator(nn.Module):
         out = self.tailblock(out)
         out = hb_out + out
         out = self.upsamples(out)
-        out = self.conv(out)
+        out = self.features(out)
+        # print(out.size())
         return out
 
 
@@ -42,46 +48,49 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         # input shape (3, 96, 96)
         self.conv_model = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, stride=1),
+            nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, padding_mode="reflect"),
             nn.LeakyReLU(0.2, inplace=True),
             # feature shape(64, 96, 96)
-            nn.Conv2d(64, 64, kernel_size=4, stride=2),
+            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, padding_mode="reflect"),
             nn.BatchNorm2d(64),
             nn.LeakyReLU(0.2, inplace=True),
             # feature shape(64, 48, 48)
-            nn.Conv2d(64, 128, kernel_size=3, stride=1),
+            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, padding_mode="reflect"),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
             # feature shape(128, 48, 48)
-            nn.Conv2d(128, 128, kernel_size=4, stride=2),
+            nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, padding_mode="reflect"),
             nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
             # feature shape(128, 24, 24)
-            nn.Conv2d(128, 256, kernel_size=3, stride=1),
+            nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1, padding_mode="reflect"),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2, inplace=True),
             # feature shape(256, 24, 24)
-            nn.Conv2d(256, 256, kernel_size=4, stride=2),
+            nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, padding_mode="reflect"),
             nn.BatchNorm2d(256),
             nn.LeakyReLU(0.2, inplace=True),
             # feature shape(256, 12, 12)
-            nn.Conv2d(256, 512, kernel_size=3, stride=1),
+            nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1, padding_mode="reflect"),
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2, inplace=True),
-            # feature shape(512, 12, 12)
-            nn.Conv2d(512, 512, kernel_size=4, stride=2),
-            nn.BatchNorm2d(512),
+            nn.Conv2d(512, 128, kernel_size=3, stride=1, padding=1, padding_mode="reflect"),
+            nn.BatchNorm2d(128),
             nn.LeakyReLU(0.2, inplace=True),
-            # output shape (512, 6, 6)
-            nn.Flatten()
         )
-        self.liner1 = nn.Linear(512 * 6 * 6, 1024)
-        self.liner2 = nn.Linear(1024, 1)
+
+        self.predict = nn.Sequential(
+            nn.Conv2d(128, 1, kernel_size=3, padding=1, padding_mode="reflect")
+        )
+
         self.activation = nn.Sigmoid()
 
     def forward(self, x):
+        # print(x.size())
         out = self.conv_model(x)
-        out = self.liner1(out)
-        out = self.liner2(out)
+        # print(out.size())
+        self.predict(out)
+        # print(out.size())
         out = self.activation(out)
+        # print(out.size())
         return out

@@ -1,37 +1,30 @@
 import os
-import numpy as np
-from torch import Tensor
-from torch.autograd import Variable
 from torchvision.utils import save_image
 from net import Generator, Discriminator
 import torch
 from torchvision.models import vgg19
-import torchsummary as summary
 from torch.utils.data import DataLoader
 from data_ops import PreDateSet
 import loss_functions as losses
 from torch.optim import Adam, SGD
+from tensorboardX import SummaryWriter
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+logger = SummaryWriter(log_dir="result/log")
 
 vggnet = vgg19()
 pretrainmodel_path = "pretrainmodels/vgg19.pth"
 pretrainmodel = torch.load(pretrainmodel_path)
 vggnet.load_state_dict(pretrainmodel)
 vggnet = vggnet.features
-vggnet.to(device)
+vggnet.cuda()
 for p in vggnet.parameters():
     p.requires_grad = False
 
 # load model
 g_net = Generator(residual_num=19, upsample_x=2)
-g_net.to(device)
+g_net.cuda()
 d_net = Discriminator()
-d_net.to(device)
-print("G_net model summary:")
-summary.summary(g_net, input_size=(3, 24, 24))
-print("D_net model summary:")
-summary.summary(d_net, input_size=(3, 96, 96))
+d_net.cuda()
 
 train_lr_image_path = "dataset/train/LR"
 train_hr_image_path = "dataset/train/HR"
@@ -65,7 +58,7 @@ train_data_l = len(train_predataset)
 test_data_l = len(test_predataset)
 
 for epoch in range(EPOCH):
-    for i, (hr_image, lr_image) in enumerate(train_predataset):
+    for i, (hr_image, lr_image) in enumerate(train_data):
 
         d_net.train()
         g_net.train()
@@ -75,8 +68,8 @@ for epoch in range(EPOCH):
         # gen_loss_1 = mse_loss + adv_loss
         # gen_loss_2 = vgg_loss + adv_loss
         optimizer_G.zero_grad()
-        g_hr_img = g_net(lr_image).to(device)
-        disc_g_img = d_net(g_hr_img).to(device)
+        g_hr_img = g_net(lr_image)
+        disc_g_img = d_net(g_hr_img)
         # 3 parts losses
         content_loss = losses.mse_loss(hr_image, g_hr_img)
         vgg_loss = losses.vgg_loss(vggnet(hr_image), vggnet(g_hr_img))
@@ -92,8 +85,10 @@ for epoch in range(EPOCH):
         #######################
         optimizer_D.zero_grad()
 
-        real_d_img = d_net(hr_image).to(device)
-        disc_loss = 1 - disc_g_img.mean() + real_d_img.mean()
+        real = torch.ones_like(disc_g_img, requires_grad=False)
+
+        real_d_img = d_net(hr_image)
+        disc_loss = real - disc_g_img + real_d_img
         disc_loss.backward()
         optimizer_D.step()
 

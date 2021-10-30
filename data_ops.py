@@ -1,6 +1,3 @@
-import torchvision
-import torch
-from torch import Tensor
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
 import torch.nn.functional as F
@@ -78,7 +75,7 @@ class PreDateSet(Dataset):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         hr_img, lr_img = self.images_pair_data[index]
-        hr_img, lr_img = tran_(cv2.imread(hr_img)), tran_(cv2.imread(lr_img))
+        hr_img, lr_img = tran_(cv2.imread(hr_img)).cuda(), tran_(cv2.imread(lr_img)).cuda()
         return hr_img, lr_img
 
     def __len__(self):
