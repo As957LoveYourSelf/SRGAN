@@ -84,5 +84,3 @@ class PreDateSet(Dataset):
     def __len__(self):
         return len(self.images_pair_data)
 
-
-make_dateset(HR_image_path)
